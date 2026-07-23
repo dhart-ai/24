@@ -168,3 +168,9 @@ export function applyEffectResult(combatState, effectResult) {
   return effectResult.skipsGuardTurn; // indicate whether the Guard should skip its attack this turn
 }
 
+export function guardAttack(combatState, skipThisTurn) {
+  if (skipThisTurn) return 0; // Guard skips this turn, no damage dealt
+  combatState.playerHealth -= PARAMS.GUARD_ATTACK_DAMAGE; // Guard deals damage to player
+  return PARAMS.GUARD_ATTACK_DAMAGE; // return the damage dealt
+}
+
