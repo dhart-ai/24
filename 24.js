@@ -160,3 +160,11 @@ export function resolveStandDamage(combatState, cardState, getTierFn) {
   }
   return { damageToGuard, selfDamage };
 }
+
+
+export function applyEffectResult(combatState, effectResult) {
+  combatState.guardHealth -= effectResult.damageToGuard; // apply damage to guard
+  combatState.playerHealth -= effectResult.selfDamage; // apply self-damage to player
+  return effectResult.skipsGuardTurn; // indicate whether the Guard should skip its attack this turn
+}
+
