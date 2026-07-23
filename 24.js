@@ -117,3 +117,46 @@ export function tickEffects(effectState) {
   });
   effectState.activeEffects = effectState.activeEffects.filter(effect => effect.turnsRemaining > 0);
 }
+
+// Health/Combat System
+// Owns: player HP, Guard HP, stand-timing damage resolution
+//       (including bust overshoot self-damage), and the Guard's
+//       turn-based attack.
+// Talks to: Card System (reads standStatus + runningTotal),
+//           Card-Effect System (reads playEffect's returned
+//             { damageToGuard, selfDamage, skipsGuardTurn }),
+//           Level System (cut for the slice - not needed here).
+
+export const PARAMS = {
+  TIER1_DAMAGE: 5,
+  TIER2_DAMAGE: 10,
+  TIER3_DAMAGE: 20,
+  BUST_SELF_DAMAGE: 10,
+  PLAYER_MAX_HEALTH: 100,
+  GUARD_MAX_HEALTH: 40,
+  GUARD_ATTACK_DAMAGE: 3,
+};
+
+export function createCombatState() {
+  return {
+    playerHealth: PARAMS.PLAYER_MAX_HEALTH,
+    guardHealth: PARAMS.GUARD_MAX_HEALTH,
+  };
+}
+
+export function resolveStandDamage(combatState, cardState, getTierFn) {
+  // TODO: called when standStatus is 'stood' or 'bust'.
+  let damageToGuard = 0;
+  let selfDamage = 0;
+  if (cardState.standStatus === 'bust') { // player busted, apply self-damage
+    selfDamage = PARAMS.BUST_SELF_DAMAGE;
+    combatState.playerHealth -= selfDamage;
+  } else if (cardState.standStatus === 'stood') { // player stood, apply damage to guard based on tier
+    const tier = getTierFn(cardState.runningTotal);
+    if (tier === 1) damageToGuard = PARAMS.TIER1_DAMAGE; // tier 1 damage
+    if (tier === 2) damageToGuard = PARAMS.TIER2_DAMAGE; // tier 2 damage
+    if (tier === 3) damageToGuard = PARAMS.TIER3_DAMAGE; // tier 3 damage
+    combatState.guardHealth -= damageToGuard;
+  }
+  return { damageToGuard, selfDamage };
+}
