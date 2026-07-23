@@ -174,3 +174,11 @@ export function guardAttack(combatState, skipThisTurn) {
   return PARAMS.GUARD_ATTACK_DAMAGE; // return the damage dealt
 }
 
+export function checkEncounterEnd(combatState) {
+  combatState.playerHealth = Math.max(0, combatState.playerHealth); // clamp player health to 0 minimum
+  combatState.guardHealth = Math.max(0, combatState.guardHealth);   // clamp guard health to 0 minimum
+  if (combatState.guardHealth <= 0) return 'won'; // player wins if guard is defeated
+  if (combatState.playerHealth <= 0) return 'lost'; // player loses if health reaches 0
+  return null; // encounter continues otherwise
+}
+
