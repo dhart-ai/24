@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>24 — Cellblock Slice</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+  :root{
+    --ink:#0c0d0c;
+    --concrete:#1c1e1c;
+    --concrete-2:#2a2c2a;
+    --bone:#e9e4d6;
+    --bone-dim:#a9a596;
+    --exit-green:#9dff6b;
+    --blood:#c53a3a;
+    --amber:#e0a84b;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;
+    background:radial-gradient(ellipse at 50% -10%, #232520 0%, var(--ink) 60%);
+    color:var(--bone);
+    font-family:'IBM Plex Mono',monospace;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+  }
+  #stage{
+    width:720px;max-width:96vw;
+    background:var(--concrete);
+    border:1px solid #3a3c38;
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,255,255,.02);
+    position:relative;
+  }
+  .barred-top{height:6px;background:repeating-linear-gradient(90deg, var(--concrete-2) 0 3px, var(--ink) 3px 4px);}
+  header{padding:22px 26px 14px;border-bottom:1px solid #33352f;}
+  h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:28px;letter-spacing:.06em;text-transform:uppercase;margin:0;color:var(--bone);}
+  h1 span{color:var(--exit-green);}
+  .subtitle{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--bone-dim);margin-top:4px;}
+
+  .hud{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px 26px 6px;}
+  .hbar-wrap{display:flex;flex-direction:column;gap:6px;}
+  .hbar-label{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--bone-dim);}
+  .hbar-label b{color:var(--bone);font-weight:600;}
+  .hbar{height:10px;background:#100f0d;border:1px solid #3a3c38;position:relative;overflow:hidden;}
+  .hbar-fill{height:100%;transition:width .35s ease;}
+  .hbar-fill.player{background:linear-gradient(90deg,#6fae3f,var(--exit-green));}
+  .hbar-fill.guard{background:linear-gradient(90deg,#7a2626,var(--blood));}
+
+  .phase-strip{display:flex;gap:6px;padding:10px 26px 0;}
+  .phase-tag{flex:1;text-align:center;padding:6px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #34362f;color:var(--bone-dim);}
+  .phase-tag.active{border-color:var(--exit-green);color:var(--exit-green);}
+  .phase-tag.done{border-color:#4a4c44;color:var(--bone-dim);opacity:.5;}
+
+  #log{margin:14px 26px 0;min-height:34px;font-size:12px;color:var(--amber);letter-spacing:.02em;}
+
+  .table{display:flex;flex-direction:column;align-items:center;padding:6px 26px 10px;gap:10px;}
+  .running-total{font-family:'Oswald',sans-serif;font-size:54px;font-weight:700;letter-spacing:.02em;color:var(--bone);text-shadow:0 0 30px rgba(157,255,107,.08);}
+  .running-total .target{font-size:22px;color:var(--bone-dim);font-family:'IBM Plex Mono',monospace;}
+  .tier-readout{font-size:11px;color:var(--bone-dim);letter-spacing:.08em;text-transform:uppercase;height:14px;}
+  .tier-readout.hot{color:var(--exit-green);}
+  .tier-readout.bust{color:var(--blood);}
+
+  .hand{display:flex;gap:8px;min-height:96px;align-items:center;}
+  .card{
+    width:56px;height:82px;background:#efe9d8;color:#1c1e1c;border:1px solid #b8b2a0;position:relative;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;
+    box-shadow:0 4px 10px rgba(0,0,0,.4);
+    animation:deal .28s ease;
+  }
+  .card::after{content:'ID';position:absolute;top:4px;left:6px;font-size:8px;font-family:'IBM Plex Mono',monospace;color:#8a8474;letter-spacing:.1em;}
+  @keyframes deal{from{transform:translateY(-16px) rotate(-4deg);opacity:0;}to{transform:none;opacity:1;}}
+
+  .actions{display:flex;flex-direction:column;gap:10px;padding:8px 26px 22px;}
+  .row{display:flex;gap:8px;}
+  button{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.04em;
+    background:var(--ink);color:var(--bone);border:1px solid #3a3c38;
+    padding:12px 10px;cursor:pointer;flex:1;text-transform:uppercase;transition:.15s;
+  }
+  button:hover:not(:disabled){border-color:var(--exit-green);color:var(--exit-green);}
+  button:disabled{opacity:.32;cursor:not-allowed;}
+  button.primary{background:var(--exit-green);color:#0c0d0c;border-color:var(--exit-green);font-weight:600;}
+  button.primary:hover:not(:disabled){filter:brightness(1.1);color:#0c0d0c;}
+  .cost{display:block;font-size:10px;color:var(--bone-dim);margin-top:3px;}
+  button.primary .cost{color:#1c2a12;}
+
+  #overlay{position:absolute;inset:0;background:rgba(6,6,5,.94);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:30px;}
+  #overlay.show{display:flex;}
+  #overlay h2{font-family:'Oswald',sans-serif;font-size:38px;letter-spacing:.06em;text-transform:uppercase;margin:0;}
+  #overlay p{color:var(--bone-dim);max-width:420px;font-size:13px;line-height:1.6;}
+  #overlay.won h2{color:var(--exit-green);}
+  #overlay.lost h2{color:var(--blood);}
+
+  .active-effects{display:flex;gap:6px;min-height:20px;padding:0 26px;flex-wrap:wrap;}
+  .chip{font-size:10px;padding:3px 7px;border:1px solid var(--exit-green);color:var(--exit-green);letter-spacing:.05em;text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="barred-top"></div>
+  <header>
+    <h1>24 <span>—</span> Cellblock Slice</h1>
+    <div class="subtitle">Draw to 24. Stand to strike. Bust and you take the hit anyway.</div>
+  </header>
+
+  <div class="hud">
+    <div class="hbar-wrap">
+      <div class="hbar-label"><span>You</span><b id="playerHpText"></b></div>
+      <div class="hbar"><div class="hbar-fill player" id="playerHpBar"></div></div>
+    </div>
+    <div class="hbar-wrap">
+      <div class="hbar-label"><span>The Guard</span><b id="guardHpText"></b></div>
+      <div class="hbar"><div class="hbar-fill guard" id="guardHpBar"></div></div>
+    </div>
+  </div>
+
+  <div class="phase-strip">
+    <div class="phase-tag" id="tag1">Phase 1 — Opening Hand</div>
+    <div class="phase-tag" id="tag2">Phase 2 — Effects</div>
+    <div class="phase-tag" id="tag3">Phase 3 — Close the Fight</div>
+  </div>
+
+  <div id="log">The cell door grinds open. The Guard steps in first.</div>
+
+  <div class="table">
+    <div class="running-total"><span id="total">0</span><span class="target">/ 24</span></div>
+    <div class="tier-readout" id="tierReadout">&nbsp;</div>
+    <div class="hand" id="hand"></div>
+    <div class="active-effects" id="activeEffects"></div>
+  </div>
+
+  <div class="actions">
+    <div class="row">
+      <button class="primary" id="drawBtn">Draw</button>
+      <button id="standBtn">Stand</button>
+    </div>
+    <div class="row">
+      <button id="eff-quick"><span>Quick Strike</span><span class="cost">cost 2 — deal 10 dmg</span></button>
+      <button id="eff-double"><span>Double Down</span><span class="cost">cost 10 — 10 dmg, x2 next</span></button>
+    </div>
+    <div class="row">
+      <button id="eff-feint"><span>Feint</span><span class="cost">cost 5 — skip Guard turn, take 1</span></button>
+      <button id="eff-allin"><span>All In</span><span class="cost">cost 7 — lose 15hp, deal 45 dmg</span></button>
+    </div>
+    <div class="row">
+      <div class="hbar-label" style="flex:1;justify-content:flex-start;gap:6px;">
+        <span>Resource</span><b id="resourceText" style="color:var(--exit-green)"></b>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <h2 id="overlayTitle">—</h2>
+    <p id="overlayText"></p>
+    <button class="primary" id="restartBtn" style="max-width:200px;">Try Again</button>
+  </div>
+</div>
+
+<script type="module">
+// ===================== Card System =====================
+// Owns: current hand, drawn cards, running total toward 24.
+// Talks to: Health/Combat System (feeds stand/bust outcome),
+//           Card-Effect System (routes an effect card's play).
+
+const DECK_POOL = [1,2,3,4,5,6,7,8,9,10,10,10,10,11]; // 10/J/Q/K collapse to 10
+
+function createCardState() {
+  return {
+    hand: [],
+    runningTotal: 0,
+    standStatus: 'drawing', // 'drawing' | 'stood' | 'bust'
+  };
+}
+
+function drawCard(cardState) {
+  const value = DECK_POOL[Math.floor(Math.random() * DECK_POOL.length)];
+  cardState.hand.push(value);
+  cardState.runningTotal += value;
+  if (cardState.runningTotal > 24) {
+    cardState.standStatus = 'bust';
+  }
+  return value;
+}
+
+function stand(cardState) {
+  if (cardState.hand.length === 0) return;
+  cardState.standStatus = 'stood';
+}
+
+function getTier(runningTotal) {
+  if (runningTotal === 24) return 3;
+  if (runningTotal >= 21) return 2;
+  if (runningTotal >= 18) return 1;
+  return 0;
+}
+
+function resetHand(cardState) {
+  cardState.hand = [];
+  cardState.runningTotal = 0;
+  cardState.standStatus = 'drawing';
+}
+
+
+// ===================== Card-Effect System =====================
+// Owns: the four fixed effects, their costs, and which effects are
+//       currently active on the player (persist over multiple turns,
+//       stack additively when duplicated).
+// Talks to: Card System (receives play trigger, deducts cost),
+//           Health/Combat System (active effects modify damage there).
+
+const EFFECTS = {
+  quick:  { name: 'Quick Strike', cost: 2,  damage: 10 },
+  double: { name: 'Double Down',  cost: 10, damage: 10, buffsNext: true },
+  feint:  { name: 'Feint',        cost: 5,  selfDamage: 1, skipsGuardTurn: true },
+  allin:  { name: 'All In',       cost: 7,  selfDamage: 15, damage: 45 },
+};
+
+function createEffectState() {
+  return {
+    resource: 20,       // matches START_RESOURCE from the tunable params table
+    activeEffects: [],  // [{ kind, name, turnsRemaining }]
+  };
+}
+
+function canAfford(effectState, kind) {
+  if (!EFFECTS[kind]) return false; // invalid kind
+  return effectState.resource >= EFFECTS[kind].cost; // true if enough resource
+}
+
+function hasActiveEffect(effectState, kind) {
+  return effectState.activeEffects.some(effect => effect.kind === kind && effect.turnsRemaining > 0);
+}
+
+function playEffect(effectState, kind) {
+  if (!canAfford(effectState, kind)) {
+    return null;
+  }
+  effectState.resource -= EFFECTS[kind].cost;
+
+  const def = EFFECTS[kind];
+  let damageToGuard = def.damage || 0;
+  let selfDamage = def.selfDamage || 0;
+
+  // Double Down's buff applies to the *next* played card, not to itself -
+  // so exclude kind 'double' from consuming its own stack here.
+  if (kind !== 'double' && damageToGuard > 0) {
+    const doubleEntry = effectState.activeEffects.find(e => e.kind === 'double');
+    if (doubleEntry) {
+      // additive stacking: each stacked Double Down contributes another x2
+      // (x2 + x2 = x4 total for two stacks, x2 + x2 + x2 = x6 for three, etc.)
+      const multiplier = 2 * doubleEntry.stackCount;
+      damageToGuard *= multiplier;
+      effectState.activeEffects = effectState.activeEffects.filter(e => e.kind !== 'double');
+    }
+  }
+
+  if (def.buffsNext) {
+    const existing = effectState.activeEffects.find(e => e.kind === kind);
+    if (existing) {
+      existing.stackCount += 1;
+      existing.turnsRemaining = 1; // refresh duration on re-stack
+    } else {
+      effectState.activeEffects.push({ kind, name: def.name, turnsRemaining: 1, stackCount: 1 });
+    }
+  }
+  if (def.skipsGuardTurn) {
+    effectState.activeEffects.push({ kind, name: def.name, turnsRemaining: 1, stackCount: 1 });
+  }
+
+  return { damageToGuard, selfDamage, skipsGuardTurn: def.skipsGuardTurn || false };
+}
+
+function tickEffects(effectState) {
+  effectState.activeEffects.forEach(effect => {
+    effect.turnsRemaining -= 1;
+  });
+  effectState.activeEffects = effectState.activeEffects.filter(effect => effect.turnsRemaining > 0);
+}
+
+
+const PARAMS = {
+  TIER1_DAMAGE: 5,
+  TIER2_DAMAGE: 10,
+  TIER3_DAMAGE: 20,
+  BUST_SELF_DAMAGE: 10,
+  PLAYER_MAX_HEALTH: 100,
+  GUARD_MAX_HEALTH: 40,
+  GUARD_ATTACK_DAMAGE: 3,
+};
+
+function createCombatState() {
+  return {
+    playerHealth: PARAMS.PLAYER_MAX_HEALTH,
+    guardHealth: PARAMS.GUARD_MAX_HEALTH,
+  };
+}
+
+function resolveStandDamage(combatState, cardState, getTierFn) {
+  let damageToGuard = 0;
+  let selfDamage = 0;
+  if (cardState.standStatus === 'bust') {
+    selfDamage = PARAMS.BUST_SELF_DAMAGE;
+    combatState.playerHealth -= selfDamage;
+  } else if (cardState.standStatus === 'stood') {
+    const tier = getTierFn(cardState.runningTotal);
+    if (tier === 1) damageToGuard = PARAMS.TIER1_DAMAGE;
+    if (tier === 2) damageToGuard = PARAMS.TIER2_DAMAGE;
+    if (tier === 3) damageToGuard = PARAMS.TIER3_DAMAGE;
+    combatState.guardHealth -= damageToGuard;
+  }
+  return { damageToGuard, selfDamage };
+}
+
+function applyEffectResult(combatState, effectResult) {
+  combatState.guardHealth -= effectResult.damageToGuard;
+  combatState.playerHealth -= effectResult.selfDamage;
+  return effectResult.skipsGuardTurn;
+}
+
+function guardAttack(combatState, skipThisTurn) {
+  if (skipThisTurn) return 0;
+  combatState.playerHealth -= PARAMS.GUARD_ATTACK_DAMAGE;
+  return PARAMS.GUARD_ATTACK_DAMAGE;
+}
+
+function checkEncounterEnd(combatState) {
+  combatState.playerHealth = Math.max(0, combatState.playerHealth);
+  combatState.guardHealth = Math.max(0, combatState.guardHealth);
+  if (combatState.guardHealth <= 0) return 'won';
+  if (combatState.playerHealth <= 0) return 'lost';
+  return null;
+}
+
+let cardState, effectState, combatState, encounterPhase, turnLocked;
+
+function newRun(){
+  cardState = createCardState();
+  effectState = createEffectState();
+  combatState = createCombatState();
+  encounterPhase = 'drawing'; // 'drawing' | 'won' | 'lost'
+  turnLocked = false;
+  el('overlay').className = '';
+  setLog('The cell door grinds open. The Guard steps in first.');
+  render();
+}
+
+const el = id => document.getElementById(id);
+function setLog(msg){ el('log').textContent = msg; }
+function appendLog(msg){ el('log').textContent += '  ' + msg; }
+
+function currentVisualPhase(){
+  const pct = combatState.guardHealth / PARAMS.GUARD_MAX_HEALTH;
+  if (pct <= 1/3) return 3;
+  if (pct <= 2/3) return 2;
+  return 1;
+}
+
+function render(){
+  el('playerHpText').textContent = `${combatState.playerHealth} / ${PARAMS.PLAYER_MAX_HEALTH}`;
+  el('guardHpText').textContent = `${combatState.guardHealth} / ${PARAMS.GUARD_MAX_HEALTH}`;
+  el('playerHpBar').style.width = Math.max(0, combatState.playerHealth/PARAMS.PLAYER_MAX_HEALTH*100) + '%';
+  el('guardHpBar').style.width = Math.max(0, combatState.guardHealth/PARAMS.GUARD_MAX_HEALTH*100) + '%';
+  el('total').textContent = cardState.runningTotal;
+  el('resourceText').textContent = effectState.resource;
+
+  const hand = el('hand');
+  hand.innerHTML = '';
+  cardState.hand.forEach(v => {
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.textContent = v;
+    hand.appendChild(c);
+  });
+
+  const tr = el('tierReadout');
+  const total = cardState.runningTotal;
+  if (total === 0) { tr.textContent = ''; tr.className = 'tier-readout'; }
+  else if (total > 24) { tr.textContent = `BUST — Guard takes 0, you take ${PARAMS.BUST_SELF_DAMAGE}`; tr.className = 'tier-readout bust'; }
+  else {
+    const tier = getTier(total);
+    const dmgByTier = [0, PARAMS.TIER1_DAMAGE, PARAMS.TIER2_DAMAGE, PARAMS.TIER3_DAMAGE];
+    if (tier > 0) { tr.textContent = `TIER ${tier} — stand now for ${dmgByTier[tier]} dmg`; tr.className = 'tier-readout hot'; }
+    else { tr.textContent = 'below tier 1 — no damage yet'; tr.className = 'tier-readout'; }
+  }
+
+  const vp = currentVisualPhase();
+  [1,2,3].forEach(n => {
+    el('tag'+n).className = 'phase-tag' + (n===vp ? ' active' : (n<vp ? ' done' : ''));
+  });
+
+  const ae = el('activeEffects');
+  ae.innerHTML = '';
+  effectState.activeEffects.forEach(fx => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = fx.stackCount > 1 ? `${fx.name} x${fx.stackCount}` : fx.name;
+    ae.appendChild(chip);
+  });
+
+  const acting = encounterPhase === 'drawing' && !turnLocked;
+  el('drawBtn').disabled = !acting || cardState.standStatus !== 'drawing';
+  el('standBtn').disabled = !acting || cardState.standStatus !== 'drawing' || cardState.hand.length === 0;
+  el('eff-quick').disabled = !acting || effectState.resource < EFFECTS.quick.cost;
+  el('eff-double').disabled = !acting || effectState.resource < EFFECTS.double.cost;
+  el('eff-feint').disabled = !acting || effectState.resource < EFFECTS.feint.cost;
+  el('eff-allin').disabled = !acting || effectState.resource < EFFECTS.allin.cost || combatState.playerHealth <= 15;
+}
+
+function onDraw(){
+  if (encounterPhase !== 'drawing' || turnLocked) return;
+  drawCard(cardState);
+  if (cardState.standStatus === 'bust') {
+    endTurn();
+  } else {
+    render();
+  }
+}
+
+function onStand(){
+  if (encounterPhase !== 'drawing' || turnLocked) return;
+  stand(cardState);
+  endTurn();
+}
+
+function onEffect(kind){
+  if (encounterPhase !== 'drawing' || turnLocked) return;
+  const result = playEffect(effectState, kind);
+  if (!result) return; // couldn't afford it
+  const skip = applyEffectResult(combatState, result);
+  appendLog(`${EFFECTS[kind].name} — ${result.damageToGuard ? `dealt ${result.damageToGuard} dmg` : 'effect applied'}${result.selfDamage ? `, took ${result.selfDamage} dmg` : ''}.`);
+
+  const ended = checkEncounterEnd(combatState);
+  if (ended) { finishEncounter(ended); return; }
+  render();
+}
+
+function endTurn(){
+  turnLocked = true;
+  const { damageToGuard, selfDamage } = resolveStandDamage(combatState, cardState, getTier);
+  if (cardState.standStatus === 'bust') {
+    setLog(`Busted at ${cardState.runningTotal} — no damage dealt, you take ${selfDamage}.`);
+  } else if (damageToGuard > 0) {
+    setLog(`Stood at ${cardState.runningTotal} — dealt ${damageToGuard} damage.`);
+  } else {
+    setLog(`Stood at ${cardState.runningTotal} — too low for any tier, 0 damage.`);
+  }
+  render();
+
+  const ended = checkEncounterEnd(combatState);
+  if (ended) { finishEncounter(ended); return; }
+
+  const skipGuard = effectState.activeEffects.some(f => f.kind === 'feint');
+  setTimeout(() => {
+    const dmg = guardAttack(combatState, skipGuard);
+    if (skipGuard) {
+      effectState.activeEffects = effectState.activeEffects.filter(f => f.kind !== 'feint');
+      appendLog("The Guard's attack is skipped this turn.");
+    } else {
+      appendLog(`The Guard strikes back for ${dmg}.`);
+    }
+    tickEffects(effectState);
+
+    const endedAfterAttack = checkEncounterEnd(combatState);
+    if (endedAfterAttack) { finishEncounter(endedAfterAttack); return; }
+
+    resetHand(cardState);
+    turnLocked = false;
+    render();
+  }, 450);
+}
+
+function finishEncounter(result){
+  encounterPhase = result;
+  render();
+  const o = el('overlay');
+  o.className = 'show ' + result;
+  if (result === 'won') {
+    el('overlayTitle').textContent = 'The Guard Falls';
+    el('overlayText').textContent = "The cell block goes quiet. This encounter is cleared — the rest of the escape isn't built yet, but the slice proves the loop.";
+  } else {
+    el('overlayTitle').textContent = 'Sentence Extended';
+    el('overlayText').textContent = 'You go down swinging. The Guard drags you back to your cell.';
+  }
+}
+
+el('drawBtn').onclick = onDraw;
+el('standBtn').onclick = onStand;
+el('eff-quick').onclick = () => onEffect('quick');
+el('eff-double').onclick = () => onEffect('double');
+el('eff-feint').onclick = () => onEffect('feint');
+el('eff-allin').onclick = () => onEffect('allin');
+el('restartBtn').onclick = newRun;
+
+newRun();
+</script>
+</body>
+</html>
