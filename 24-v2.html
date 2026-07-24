@@ -108,7 +108,7 @@
 <div id="stage">
   <div class="barred-top"></div>
   <header>
-    <h1>24 <span>—</span> Cellblock Slice</h1>
+    <h1>24</h1>
     <div class="subtitle">Draw to 24. Stand to strike. Bust and you take the hit anyway.</div>
   </header>
 
@@ -161,74 +161,96 @@
 <script type="module">
 
 // ===================== Card System (v2 - card-intrinsic effects) =====================
-// Owns: current hand, drawn cards, running total toward 24.
-// Cards are objects, not plain numbers, since face cards carry effects.
-// Talks to: Health/Combat System (feeds stand/bust outcome + chosen effect cards).
-
-// Each card: { value, face, effectKind }
-// face: 'plain' | 'jack' | 'queen' | 'king' | 'ace'
-// effectKind: null for plain cards, else 'bonusDamage' | 'doubleSkip' | 'guaranteedTier3' | 'reroll'
+// Store DECK.
 const DECK = [
   ...[1,2,3,4,5,6,7,8,9].flatMap(v => Array(4).fill(0).map(() => ({ value: v, face: 'plain', effectKind: null }))),
-  ...Array(4).fill(0).map(() => ({ value: 10, face: 'plain', effectKind: null })), // plain 10
+  ...Array(4).fill(0).map(() => ({ value: 10, face: 'plain', effectKind: null })),
   ...Array(4).fill(0).map(() => ({ value: 10, face: 'jack',  effectKind: 'bonusDamage' })),
   ...Array(4).fill(0).map(() => ({ value: 10, face: 'queen', effectKind: 'doubleSkip' })),
   ...Array(4).fill(0).map(() => ({ value: 10, face: 'king',  effectKind: 'guaranteedTier3' })),
   ...Array(4).fill(0).map(() => ({ value: 11, face: 'ace',   effectKind: 'reroll' })),
 ];
 
+// createCardState: handles this part of the game logic.
 function createCardState() {
+// Return the result.
   return {
     hand: [],
     runningTotal: 0,
-    standStatus: 'drawing', // 'drawing' | 'stood' | 'bust'
-    activatedEffects: [],   // effectKinds the player has chosen to activate this hand
+    standStatus: 'drawing',
+    activatedEffects: [],
   };
 }
 
+// drawCard: handles this part of the game logic.
 function drawCard(cardState) {
+// Store card.
   const card = { ...DECK[Math.floor(Math.random() * DECK.length)] };
   cardState.hand.push(card);
   cardState.runningTotal += card.value;
+// Check a condition before continuing.
   if (cardState.runningTotal > 24) {
     cardState.standStatus = 'bust';
   }
+// Return the result.
   return card;
 }
 
+// activateEffect: handles this part of the game logic.
 function activateEffect(cardState, effectKind) {
-  // called when the player clicks an effect-card already in their hand. Add effectKind to activatedEffects if not already there.
-  if (!cardState.activatedEffects.includes(effectKind)) { // only add if not already activated
+// Check a condition before continuing.
+  if (!cardState.activatedEffects.includes(effectKind)) {
     cardState.activatedEffects.push(effectKind);
   }
 }
 
+// rerollCard: handles this part of the game logic.
+function rerollCard(cardState, cardIndex) {
+// Store oldCard.
+  const oldCard = cardState.hand[cardIndex];
+  cardState.runningTotal -= oldCard.value;
+// Store newCard.
+  const newCard = { ...DECK[Math.floor(Math.random() * DECK.length)] };
+  cardState.hand[cardIndex] = newCard;
+  cardState.runningTotal += newCard.value;
+// Check a condition before continuing.
+  if (cardState.runningTotal > 24) {
+    cardState.standStatus = 'bust';
+  }
+// Return the result.
+  return newCard;
+}
+
+// stand: handles this part of the game logic.
 function stand(cardState) {
-  // guard against standing with an empty hand, set standStatus to 'stood'.
-  if (cardState.hand.length === 0) return; // can't stand with empty hand
+// Check a condition before continuing.
+  if (cardState.hand.length === 0) return;
   cardState.standStatus = 'stood';
 }
 
+// getTier: handles this part of the game logic.
 function getTier(runningTotal) {
-  if (runningTotal === 24) return 3; // exact 24 is Tier 3
+// Check a condition before continuing.
+  if (runningTotal === 24) return 3;
+// Check a condition before continuing.
   if (runningTotal >= 21) return 2;
+// Check a condition before continuing.
   if (runningTotal >= 18) return 1;
+// Return the result.
   return 0;
 }
 
+// resetHand: handles this part of the game logic.
 function resetHand(cardState) {
-  // clear hand, runningTotal, standStatus, AND activatedEffects.
   cardState.hand = [];
-  cardState.runningTotal = 0;// reset running total
-  cardState.standStatus = 'drawing'; // reset stand status
-  cardState.activatedEffects = []; // reset activated effects
+  cardState.runningTotal = 0;
+  cardState.standStatus = 'drawing';
+  cardState.activatedEffects = [];
 }
 
 
 // ===================== Health/Combat System =====================
-// Owns: player HP, Guard HP, stand-timing damage resolution
-//       (including bust overshoot self-damage), and the Guard's
-//       turn-based attack.
+// Store PARAMS.
 const PARAMS = {
   TIER1_DAMAGE: 5,
   TIER2_DAMAGE: 10,
@@ -237,63 +259,100 @@ const PARAMS = {
   PLAYER_MAX_HEALTH: 100,
   GUARD_MAX_HEALTH: 40,
   GUARD_ATTACK_DAMAGE: 3,
-  GUARANTEED_TIER3_SELF_DAMAGE: 5, // King's drawback
+  GUARANTEED_TIER3_SELF_DAMAGE: 5,
 };
 
+// createCombatState: handles this part of the game logic.
 function createCombatState() {
+// Return the result.
   return {
     playerHealth: PARAMS.PLAYER_MAX_HEALTH,
     guardHealth: PARAMS.GUARD_MAX_HEALTH,
   };
 }
 
+// resolveStandDamage: handles this part of the game logic.
 function resolveStandDamage(combatState, cardState, getTierFn) {
-  let damageToGuard = 0; // damage that will be dealt to the Guard
+// Keep track of game state variables.
+  let damageToGuard = 0;
+// Keep track of game state variables.
   let selfDamage = 0;
-  if (cardState.standStatus === 'bust') { // player busted, take self-damage
+// Keep track of game state variables.
+  let skipPlayerNextTurn = false;
+
+// Check a condition before continuing.
+  if (cardState.standStatus === 'bust') {
     selfDamage = PARAMS.BUST_SELF_DAMAGE;
-    combatState.playerHealth -= selfDamage;
-  } else if (cardState.standStatus === 'stood') { // player stood, calculate tier damage
-    const tier = getTierFn(cardState.runningTotal); // determine the tier based on running total
+  } else if (cardState.standStatus === 'stood') {
+// Store tier.
+    const tier = getTierFn(cardState.runningTotal);
+// Check a condition before continuing.
     if (tier === 1) damageToGuard = PARAMS.TIER1_DAMAGE;
+// Check a condition before continuing.
     if (tier === 2) damageToGuard = PARAMS.TIER2_DAMAGE;
+// Check a condition before continuing.
     if (tier === 3) damageToGuard = PARAMS.TIER3_DAMAGE;
-    // TODO: fold in cardState.activatedEffects here -
-    // bonusDamage (Jack): damageToGuard *= 1.5
-    // doubleSkip (Queen): damageToGuard *= 2, and the caller needs to
-    //   know the player's next turn should be skipped
-    // guaranteedTier3 (King): damageToGuard = PARAMS.TIER3_DAMAGE regardless
-    //   of actual tier, and selfDamage += PARAMS.GUARANTEED_TIER3_SELF_DAMAGE
-    combatState.guardHealth -= damageToGuard;
+
+// Store effects.
+    const effects = cardState.activatedEffects;
+// Check a condition before continuing.
+    if (effects.includes('guaranteedTier3')) {
+      damageToGuard = PARAMS.TIER3_DAMAGE;
+      selfDamage += PARAMS.GUARANTEED_TIER3_SELF_DAMAGE;
+    }
+// Check a condition before continuing.
+    if (effects.includes('bonusDamage')) {
+      damageToGuard = Math.round(damageToGuard * 1.5);
+    }
+// Check a condition before continuing.
+    if (effects.includes('doubleSkip')) {
+      damageToGuard *= 2;
+      skipPlayerNextTurn = true;
+    }
   }
-  return { damageToGuard, selfDamage };
+
+  combatState.guardHealth -= damageToGuard;
+  combatState.playerHealth -= selfDamage;
+
+// Return the result.
+  return { damageToGuard, selfDamage, skipPlayerNextTurn };
 }
 
+// guardAttack: handles this part of the game logic.
 function guardAttack(combatState, skipThisTurn) {
-  // Guard attacks the player unless skipThisTurn is true.
-  if (skipThisTurn) return 0; // skip this turn if flagged
-  combatState.playerHealth -= PARAMS.GUARD_ATTACK_DAMAGE; // apply damage to player
-  return PARAMS.GUARD_ATTACK_DAMAGE; // return the damage dealt
+// Check a condition before continuing.
+  if (skipThisTurn) return 0;
+  combatState.playerHealth -= PARAMS.GUARD_ATTACK_DAMAGE;
+// Return the result.
+  return PARAMS.GUARD_ATTACK_DAMAGE;
 }
 
-function checkEncounterEnd(combatState) { // returns 'won' if the Guard is defeated, 'lost' if the player is defeated, else null
+// checkEncounterEnd: handles this part of the game logic.
+function checkEncounterEnd(combatState) {
   combatState.playerHealth = Math.max(0, combatState.playerHealth);
   combatState.guardHealth = Math.max(0, combatState.guardHealth);
+// Check a condition before continuing.
   if (combatState.guardHealth <= 0) return 'won';
+// Check a condition before continuing.
   if (combatState.playerHealth <= 0) return 'lost';
+// Return the result.
   return null;
 }
 
 
+// Keep track of game state variables.
+let cardState, combatState, encounterPhase, turnLocked, playerTurnsSkipped;
 
-
-let cardState, combatState, encounterPhase, turnLocked; // global state for the current encounter
-
+// Store el.
 const el = id => document.getElementById(id);
+// setLog: handles this part of the game logic.
 function setLog(msg){ el('log').textContent = msg; }
+// appendLog: handles this part of the game logic.
 function appendLog(msg){ el('log').textContent += '  ' + msg; }
 
+// Store FACE_LABEL.
 const FACE_LABEL = { plain: '', jack: 'J', queen: 'Q', king: 'K', ace: 'A' };
+// Store EFFECT_LABEL.
 const EFFECT_LABEL = {
   bonusDamage: '+50% dmg',
   doubleSkip: 'x2 dmg, skip next',
@@ -301,23 +360,31 @@ const EFFECT_LABEL = {
   reroll: 'reroll',
 };
 
+// newRun: handles this part of the game logic.
 function newRun(){
   cardState = createCardState();
   combatState = createCombatState();
   encounterPhase = 'drawing';
   turnLocked = false;
+  playerTurnsSkipped = 0;
   el('overlay').className = '';
   setLog('The cell door grinds open. The Guard steps in first.');
   render();
 }
 
+// currentVisualPhase: handles this part of the game logic.
 function currentVisualPhase(){
+// Store pct.
   const pct = combatState.guardHealth / PARAMS.GUARD_MAX_HEALTH;
+// Check a condition before continuing.
   if (pct <= 1/3) return 3;
+// Check a condition before continuing.
   if (pct <= 2/3) return 2;
+// Return the result.
   return 1;
 }
 
+// render: handles this part of the game logic.
 function render(){
   el('playerHpText').textContent = `${combatState.playerHealth} / ${PARAMS.PLAYER_MAX_HEALTH}`;
   el('guardHpText').textContent = `${combatState.guardHealth} / ${PARAMS.GUARD_MAX_HEALTH}`;
@@ -325,61 +392,87 @@ function render(){
   el('guardHpBar').style.width = Math.max(0, combatState.guardHealth/PARAMS.GUARD_MAX_HEALTH*100) + '%';
   el('total').textContent = cardState.runningTotal;
 
+// Store hand.
   const hand = el('hand');
   hand.innerHTML = '';
+// Loop through each item.
   cardState.hand.forEach((card, i) => {
+// Store c.
     const c = document.createElement('div');
+// Store isEffect.
     const isEffect = !!card.effectKind;
+// Store used.
     const used = isEffect && cardState.activatedEffects.includes(card.effectKind);
     c.className = 'card' + (isEffect ? ' effect-card' : '') + (isEffect && !used ? ' usable' : '') + (used ? ' used' : '');
     c.dataset.tag = 'ID';
     c.innerHTML = `${card.value}${FACE_LABEL[card.face] ? `<span class="face-label">${FACE_LABEL[card.face]}</span>` : ''}`;
+// Check a condition before continuing.
     if (isEffect && !used) {
       c.title = EFFECT_LABEL[card.effectKind];
-      c.onclick = () => onActivateEffect(card.effectKind);
+// Connect a button to its function.
+      c.onclick = () => card.effectKind === 'reroll'
+        ? onReroll(i)
+        : onActivateEffect(card.effectKind);
     }
     hand.appendChild(c);
   });
 
+// Store tr.
   const tr = el('tierReadout');
+// Store total.
   const total = cardState.runningTotal;
+// Check a condition before continuing.
   if (total === 0) { tr.textContent = ''; tr.className = 'tier-readout'; }
   else if (total > 24) { tr.textContent = `BUST — Guard takes 0, you take ${PARAMS.BUST_SELF_DAMAGE}`; tr.className = 'tier-readout bust'; }
   else {
+// Store tier.
     const tier = getTier(total);
+// Store dmgByTier.
     const dmgByTier = [0, PARAMS.TIER1_DAMAGE, PARAMS.TIER2_DAMAGE, PARAMS.TIER3_DAMAGE];
+// Check a condition before continuing.
     if (tier > 0) { tr.textContent = `TIER ${tier} — stand now for ${dmgByTier[tier]} dmg`; tr.className = 'tier-readout hot'; }
     else { tr.textContent = 'below tier 1 — no damage yet'; tr.className = 'tier-readout'; }
   }
 
+// Store vp.
   const vp = currentVisualPhase();
+// Loop through each item.
   [1,2,3].forEach(n => {
     el('tag'+n).className = 'phase-tag' + (n===vp ? ' active' : (n<vp ? ' done' : ''));
   });
 
+// Store ae.
   const ae = el('activeEffects');
   ae.innerHTML = '';
+// Loop through each item.
   cardState.activatedEffects.forEach(kind => {
+// Store chip.
     const chip = document.createElement('div');
     chip.className = 'chip';
     chip.textContent = EFFECT_LABEL[kind];
     ae.appendChild(chip);
   });
 
+// Store acting.
   const acting = encounterPhase === 'drawing' && !turnLocked;
   el('drawBtn').disabled = !acting || cardState.standStatus !== 'drawing';
   el('standBtn').disabled = !acting || cardState.standStatus !== 'drawing' || cardState.hand.length === 0;
 }
 
+// onActivateEffect: handles this part of the game logic.
 function onActivateEffect(effectKind){
+// Check a condition before continuing.
   if (encounterPhase !== 'drawing' || turnLocked) return;
   activateEffect(cardState, effectKind);
   render();
 }
 
-function onDraw(){
+// onReroll: handles this part of the game logic.
+function onReroll(cardIndex){
+// Check a condition before continuing.
   if (encounterPhase !== 'drawing' || turnLocked) return;
-  drawCard(cardState);
+  rerollCard(cardState, cardIndex);
+// Check a condition before continuing.
   if (cardState.standStatus === 'bust') {
     endTurn();
   } else {
@@ -387,15 +480,33 @@ function onDraw(){
   }
 }
 
+// onDraw: handles this part of the game logic.
+function onDraw(){
+// Check a condition before continuing.
+  if (encounterPhase !== 'drawing' || turnLocked) return;
+  drawCard(cardState);
+// Check a condition before continuing.
+  if (cardState.standStatus === 'bust') {
+    endTurn();
+  } else {
+    render();
+  }
+}
+
+// onStand: handles this part of the game logic.
 function onStand(){
+// Check a condition before continuing.
   if (encounterPhase !== 'drawing' || turnLocked) return;
   stand(cardState);
   endTurn();
 }
 
+// endTurn: handles this part of the game logic.
 function endTurn(){
   turnLocked = true;
-  const { damageToGuard, selfDamage } = resolveStandDamage(combatState, cardState, getTier);
+// Store { damageToGuard, selfDamage, skipPlayerNextTurn }.
+  const { damageToGuard, selfDamage, skipPlayerNextTurn } = resolveStandDamage(combatState, cardState, getTier);
+// Check a condition before continuing.
   if (cardState.standStatus === 'bust') {
     setLog(`Busted at ${cardState.runningTotal} — no damage dealt, you take ${selfDamage}.`);
   } else if (damageToGuard > 0) {
@@ -403,36 +514,59 @@ function endTurn(){
   } else {
     setLog(`Stood at ${cardState.runningTotal} — too low for any tier, 0 damage.`);
   }
+// Check a condition before continuing.
+  if (skipPlayerNextTurn) {
+    playerTurnsSkipped += 1;
+    appendLog('Your next turn will be skipped.');
+  }
   render();
 
+// Store ended.
   const ended = checkEncounterEnd(combatState);
+// Check a condition before continuing.
   if (ended) { finishEncounter(ended); return; }
-  doubleSkip = cardState.activatedEffects.includes('doubleSkip');
-  if (doubleSkip) {
-    appendLog('Your next turn will be skipped due to doubleSkip effect.');
-  }
-  // TODO: 'doubleSkip' (Queen) should make the player skip their own
-  // next turn - that's not wired up yet, since it needs a "player turn
-  // skipped" state this loop doesn't have. Worth adding once
-  // resolveStandDamage actually applies activatedEffects.
+
+  runGuardAttackThenAdvance();
+}
+
+// runGuardAttackThenAdvance: handles this part of the game logic.
+function runGuardAttackThenAdvance(){
   setTimeout(() => {
+// Store dmg.
     const dmg = guardAttack(combatState, false);
     appendLog(`The Guard strikes back for ${dmg}.`);
 
+// Store endedAfterAttack.
     const endedAfterAttack = checkEncounterEnd(combatState);
+// Check a condition before continuing.
     if (endedAfterAttack) { finishEncounter(endedAfterAttack); return; }
 
     resetHand(cardState);
+
+// Check a condition before continuing.
+    if (playerTurnsSkipped > 0) {
+      playerTurnsSkipped -= 1;
+      appendLog("You're still reeling - this turn is skipped.");
+      render();
+      // player does nothing this turn: no draw, straight to the next Guard attack
+      runGuardAttackThenAdvance();
+// Return the result.
+      return;
+    }
+
     turnLocked = false;
     render();
   }, 450);
 }
 
+// finishEncounter: handles this part of the game logic.
 function finishEncounter(result){
   encounterPhase = result;
   render();
+// Store o.
   const o = el('overlay');
   o.className = 'show ' + result;
+// Check a condition before continuing.
   if (result === 'won') {
     el('overlayTitle').textContent = 'The Guard Falls';
     el('overlayText').textContent = "The cell block goes quiet. This encounter is cleared — the rest of the escape isn't built yet, but the slice proves the loop.";
@@ -442,8 +576,11 @@ function finishEncounter(result){
   }
 }
 
+// Connect a button to its function.
 el('drawBtn').onclick = onDraw;
+// Connect a button to its function.
 el('standBtn').onclick = onStand;
+// Connect a button to its function.
 el('restartBtn').onclick = newRun;
 
 newRun();
